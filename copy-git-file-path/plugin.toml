@@ -1,0 +1,23 @@
+id = "local.copy-git-file-path"
+name = "Copy Git File Path"
+version = "0.0.3"
+description = "Copy the web URL of a file in its Git repository."
+categories = ["vcs"]
+engines.openidea = "^1.4"
+wasm = "dist/plugin.wasm"
+
+[capabilities]
+required = ["editor.read", "vcs.read", "clipboard"]
+
+[[contributes.commands]]
+id = "copy"
+title = "Copy Git File Path"
+category = "Git"
+
+[[contributes.menus]]
+menu = "projectView.context"
+command = "copy"
+
+[[contributes.menus]]
+menu = "editorTab.context"
+command = "copy"

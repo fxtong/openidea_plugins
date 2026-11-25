@@ -1,0 +1,74 @@
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 8px 12px 12px; }
+  #requests { padding: 0; margin: 0; list-style: none; }
+  .request { padding: 11px 8px; border-bottom: 1px solid var(--openidea-border, #d6dce6); }
+  .request:last-child { border-bottom: 0; }
+  .request.current { background: var(--openidea-bg-selected, #e3ecff); border-radius: 5px; }
+  .heading { display: flex; align-items: baseline; gap: 6px; }
+  .number { flex: 0 0 auto; color: var(--openidea-link, #245abc); }
+  .title { min-width: 0; overflow-wrap: anywhere; font-weight: 600; line-height: 1.45; }
+  .branches {
+    display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px;
+    margin: 4px 0 8px; color: var(--openidea-fg-muted, #657084); line-height: 1.4;
+  }
+  .branch { min-width: 0; overflow-wrap: anywhere; }
+  .state { color: var(--openidea-fg-muted, #657084); margin-inline-start: 5px; }
+  .actions { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+  button {
+    border: 1px solid var(--openidea-border, #bdc4d0); border-radius: 5px; padding: 3px 8px;
+    background: var(--openidea-bg, Canvas); color: inherit; font: inherit; cursor: pointer;
+  }
+  button:hover { background: var(--openidea-bg-hover, #edf1f8); }
+  button:focus-visible { outline: 2px solid var(--openidea-focus-ring, #3478e5); outline-offset: 1px; }
+  .feedback, #status { color: var(--openidea-fg-muted, #657084); overflow-wrap: anywhere; }
+  #status { margin: 3px 8px 5px; white-space: pre-wrap; }
+</style>
+
+<p id="status" aria-live="polite"></p>
+<ul id="requests" aria-label="项目 MR"></ul>
+<script type="application/json" id="initial"><!--REQUESTS_STATE--></script>
+<script>
+  const state = JSON.parse(document.getElementById("initial").textContent);
+  const list = document.getElementById("requests");
+  const status = document.getElementById("status");
+  status.textContent = state.status;
+  status.hidden = !state.status;
+  const feedbackByIid = new Map();
+
+  function element(tag, className, value = "") {
+    const node = document.createElement(tag);
+    node.className = className;
+    node.textContent = value;
+    return node;
+  }
+  function action(label, kind, iid) {
+    const button = element("button", "", label);
+    button.type = "button";
+    button.setAttribute("aria-label", label + "（MR !" + iid + "）");
+    button.addEventListener("click", () => {
+      window.openidea.postMessage(JSON.stringify({ project: state.project, iid, action: kind }));
+    });
+    return button;
+  }
+  for (const request of state.requests) {
+    const row = element("li", request.iid === state.highlighted ? "request current" : "request");
+    const heading = element("div", "heading");
+    heading.append(element("span", "number", "!" + request.iid), element("span", "title", request.title));
+    const branches = element("div", "branches");
+    branches.append(element("span", "branch", request.source), element("span", "arrow", "→"),
+      element("span", "branch", request.target), element("span", "state", request.draft ? "Draft" : "Open"));
+    const actions = element("div", "actions");
+    const feedback = element("span", "feedback");
+    feedback.setAttribute("role", "status");
+    feedbackByIid.set(request.iid, feedback);
+    actions.append(action("在 GitLab 打开", "open", request.iid), action("复制链接", "copy", request.iid), feedback);
+    row.append(heading, branches, actions);
+    list.append(row);
+  }
+  openidea.onMessage(raw => {
+    const reply = JSON.parse(raw);
+    const feedback = feedbackByIid.get(reply.iid);
+    if (feedback) feedback.textContent = reply.message;
+  });
+</script>

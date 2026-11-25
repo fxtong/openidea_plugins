@@ -1,0 +1,33 @@
+id = "local.gitlab-merge-requests"
+name = "GitLab Merge Requests"
+version = "0.1.7"
+description = "Create and browse GitLab merge requests using your local glab login."
+categories = ["vcs"]
+engines.openidea = "^1.4"
+wasm = "dist/plugin.wasm"
+activation = ["on-view:create", "on-view:requests", "on-event:vcs-changed"]
+
+[capabilities]
+required = ["vcs.read", "process:glab", "clipboard", "events"]
+
+[[contributes.views]]
+id = "create"
+title = "GitLab Merge Requests"
+group = "gitlab-merge-requests"
+location = "left"
+icon = "icons/mr.svg"
+
+[[contributes.views]]
+id = "requests"
+title = "项目 MR"
+group = "gitlab-merge-requests"
+location = "left"
+
+[[contributes.commands]]
+id = "new"
+title = "GitLab: 新建 Merge Request"
+category = "GitLab"
+
+[[contributes.menus]]
+menu = "tools"
+command = "new"

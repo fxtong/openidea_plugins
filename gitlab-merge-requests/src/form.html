@@ -1,0 +1,225 @@
+<style>
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body { margin: 0; }
+  .panel { height: 100%; display: flex; flex-direction: column; }
+  .fields { flex: 1; overflow: auto; display: grid; align-content: start; gap: 14px; padding: 14px 14px 20px; }
+  .field { display: grid; gap: 5px; }
+  .field > label, dt { color: var(--openidea-fg-muted, #657084); }
+  .value, dd, .status { overflow-wrap: anywhere; white-space: pre-wrap; margin: 0; }
+  .optional { font-size: .92em; color: var(--openidea-fg-muted, #657084); }
+  input:not([type=checkbox]), textarea {
+    width: 100%; min-width: 0; padding: 6px 9px; border: 1px solid var(--openidea-border, #bdc4d0);
+    border-radius: 5px; background: var(--openidea-bg-input, transparent); color: inherit; font: inherit;
+  }
+  textarea { min-height: 86px; resize: vertical; }
+  button { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid var(--openidea-focus-ring, #3478e5); outline-offset: 1px; }
+  .check { display: flex; align-items: center; gap: 7px; }
+  .combo { position: relative; }
+  .combo input { padding-right: 34px; }
+  .toggle {
+    position: absolute; inset: 0 0 auto auto; height: 30px; width: 32px;
+    border: 0; border-radius: 4px; background: transparent;
+  }
+  .options {
+    position: absolute; z-index: 2; top: calc(100% + 3px); width: 100%; max-height: 230px; overflow: auto;
+    margin: 0; padding: 4px; list-style: none; border: 1px solid var(--openidea-border,#bdc4d0);
+    border-radius: 6px; background: var(--openidea-bg-elevated, Canvas); color: var(--openidea-fg, CanvasText);
+  }
+  .options li { padding: 6px; border-radius: 4px; overflow-wrap: anywhere; }
+  .options [role=option] { cursor: pointer; }
+  .options [role=option]:hover, .options [aria-selected=true] { background: var(--openidea-bg-selected, #d6e5ff); }
+  .actions {
+    flex: 0 0 auto; display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
+    justify-content: flex-end; padding: 9px 14px; border-top: 1px solid var(--openidea-border,#bdc4d0);
+    background: var(--openidea-bg, Canvas);
+  }
+  .actions button { padding: 6px 16px; border-radius: 5px; border: 1px solid var(--openidea-border,#bdc4d0); background: transparent; }
+  .actions .primary { color: #fff; background: #2865d8; border-color: #2865d8; font-weight: 600; }
+  .actions .primary:hover:not(:disabled) { background: #1f56bb; }
+  .actions button:disabled { opacity: .65; }
+  dl { display: grid; grid-template-columns: max-content minmax(0,1fr); gap: 9px 12px; margin: 0; }
+  .status { color: var(--openidea-fg-muted,#657084); }
+  [hidden] { display: none !important; }
+</style>
+
+<div class="panel" role="form" aria-label="GitLab MR">
+  <div class="fields">
+    <p class="status" id="status" aria-live="polite" hidden></p>
+    <div class="field"><label>项目</label><div class="value" id="project"></div></div>
+    <div class="field"><label>源分支</label><div class="value" id="source"></div></div>
+    <div class="field" id="target-field">
+      <label for="target">目标分支</label>
+      <div class="combo">
+        <input id="target" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="options" autocomplete="off" spellcheck="false" required>
+        <button type="button" id="toggle" class="toggle" aria-label="显示目标分支">⌄</button>
+        <ul id="options" class="options" role="listbox" hidden></ul>
+      </div>
+    </div>
+    <div class="field"><label for="title">标题</label><input id="title" required></div>
+    <div class="field"><label for="description">描述</label><textarea id="description" rows="3"></textarea></div>
+    <div class="field"><label for="reviewer">Reviewer <span class="optional">（选填，逗号分隔）</span></label><input id="reviewer"></div>
+    <div class="field"><label for="labels">标签 <span class="optional">（选填，逗号分隔）</span></label><input id="labels"></div>
+    <label class="check" id="draft-field"><input id="draft" type="checkbox">标记为 Draft</label>
+    <dl id="summary" hidden></dl>
+  </div>
+  <footer class="actions">
+    <button type="button" id="back" hidden>返回编辑</button>
+    <button type="button" id="submit" class="primary">提交</button>
+  </footer>
+</div>
+
+<script type="application/json" id="initial"><!--FORM_STATE--></script>
+<script>
+  const state = JSON.parse(document.getElementById("initial").textContent);
+  const get = id => document.getElementById(id);
+  const target = get("target");
+  const options = get("options");
+  const textFields = ["target", "title", "description", "reviewer", "labels"];
+  const send = message => window.openidea.postMessage(JSON.stringify(message));
+  let matches = [];
+  let active = -1;
+  let query = "";
+  let timer;
+  get("project").textContent = state.project;
+  get("source").textContent = state.source;
+  get("status").textContent = state.status;
+  get("status").hidden = !state.status;
+  textFields.forEach(key => { get(key).value = state.draft[key]; });
+  get("draft").checked = state.draft.draft;
+
+  if (state.preview) {
+    const values = [
+      ["目标分支", state.draft.target], ["标题", state.draft.title], ["描述", state.draft.description],
+      ["Reviewer", state.draft.reviewer], ["标签", state.draft.labels],
+      ["类型", state.draft.draft ? "Draft" : "普通 MR"]
+    ];
+    textFields.forEach(key => { get(key).closest(".field").hidden = true; get(key).disabled = true; });
+    get("draft-field").hidden = true;
+    get("summary").hidden = false;
+    for (const [key, value] of values) {
+      const label = document.createElement("dt");
+      const output = document.createElement("dd");
+      label.textContent = key;
+      output.textContent = value || "—";
+      get("summary").append(label, output);
+    }
+    get("back").hidden = false;
+    get("submit").textContent = "确认提交";
+  }
+
+  function setActive(index) {
+    active = index;
+    const entries = [...options.querySelectorAll('[role="option"]')];
+    entries.forEach((entry, i) => entry.setAttribute("aria-selected", String(i === index)));
+    if (entries[index]) {
+      target.setAttribute("aria-activedescendant", entries[index].id);
+      entries[index].scrollIntoView({ block: "nearest" });
+    } else {
+      target.removeAttribute("aria-activedescendant");
+    }
+  }
+  function showOptions(branches, fallback) {
+    matches = [...new Set(branches)];
+    options.replaceChildren();
+    matches.forEach((name, index) => {
+      const item = document.createElement("li");
+      item.id = "branch-" + index;
+      item.setAttribute("role", "option");
+      item.textContent = name;
+      options.append(item);
+    });
+    if (!matches.length) {
+      const item = document.createElement("li");
+      item.textContent = fallback;
+      options.append(item);
+    }
+    options.hidden = false;
+    target.setAttribute("aria-expanded", "true");
+    setActive(-1);
+  }
+  function closeOptions() {
+    clearTimeout(timer);
+    options.hidden = true;
+    target.setAttribute("aria-expanded", "false");
+    setActive(-1);
+  }
+  function choose(name) {
+    target.value = name;
+    target.focus();
+    closeOptions();
+  }
+  function showAll() {
+    clearTimeout(timer);
+    query = "";
+    showOptions([state.draft.target, ...state.branches].filter(branch => branch && branch !== state.source), "未读取到分支，可手动输入名称");
+  }
+  target.addEventListener("focus", showAll);
+  target.addEventListener("click", () => { if (options.hidden) showAll(); });
+  target.addEventListener("input", () => {
+    clearTimeout(timer);
+    query = target.value.trim();
+    if (!query) { showAll(); return; }
+    const requested = query;
+    const local = state.branches.filter(branch => branch.toLowerCase().includes(query.toLowerCase()) && branch !== state.source);
+    showOptions(local, "正在搜索远端分支…");
+    timer = setTimeout(() => send({ op: "search", query: requested }), 250);
+  });
+  target.addEventListener("keydown", event => {
+    if (event.key === "Escape" && !options.hidden) {
+      event.preventDefault();
+      closeOptions();
+    } else if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      if (options.hidden) showAll();
+      if (!matches.length) return;
+      const offset = event.key === "ArrowDown" ? 1 : -1;
+      setActive(active < 0 ? (offset > 0 ? 0 : matches.length - 1) : (active + offset + matches.length) % matches.length);
+    } else if (event.key === "Enter" && !options.hidden) {
+      event.preventDefault();
+      if (active >= 0) choose(matches[active]);
+      else closeOptions();
+    }
+  });
+  options.addEventListener("mousedown", event => event.preventDefault());
+  options.addEventListener("click", event => {
+    const item = event.target.closest('[role="option"]');
+    if (item) choose(item.textContent);
+  });
+  get("toggle").addEventListener("mousedown", event => event.preventDefault());
+  get("toggle").addEventListener("click", () => {
+    if (!options.hidden) { closeOptions(); return; }
+    target.focus();
+    showAll();
+  });
+  target.addEventListener("blur", closeOptions);
+
+  openidea.onMessage(text => {
+    const response = JSON.parse(text);
+    if (response.complete) {
+      get("submit").disabled = false;
+      get("back").disabled = false;
+      get("submit").textContent = state.preview ? "确认提交" : "提交";
+      return;
+    }
+    if (options.hidden || response.query !== query) return;
+    if (response.error) {
+      if (!matches.length) showOptions([], "搜索失败，可手动输入分支名称");
+      return;
+    }
+    showOptions(response.branches.filter(branch => branch !== state.source), "未找到匹配分支，可手动输入名称");
+  });
+  get("back").addEventListener("click", () => send({ op: "back" }));
+  get("submit").addEventListener("click", () => {
+    if (get("submit").disabled) return;
+    if (!state.preview && (!target.reportValidity() || !get("title").reportValidity())) return;
+    closeOptions();
+    const draft = Object.fromEntries(textFields.map(key => [key, get(key).value]));
+    draft.draft = get("draft").checked;
+    get("submit").disabled = true;
+    get("back").disabled = true;
+    get("submit").textContent = state.preview ? "提交中…" : "检查中…";
+    send(state.preview ? { op: "submit" } : { op: "preview", project: state.project, source: state.source, draft });
+  });
+</script>

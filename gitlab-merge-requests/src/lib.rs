@@ -335,8 +335,11 @@ impl Plugin for Main {
         let Some(project) = ctx.project() else {
             return;
         };
-        if Checkout::read(&project).ok().as_ref() == self.checkout.as_ref() {
-            return;
+        if let Some(checkout) = &self.checkout {
+            let _task = host::begin_task(TASK_TITLE, false);
+            if Checkout::read(&project).ok().as_ref() == Some(checkout) {
+                return;
+            }
         }
         host::refresh_view(CREATE);
         host::refresh_view(REQUESTS);
@@ -353,11 +356,10 @@ impl Views for Main {
         let Some(project) = ctx.project() else {
             return Ok(View::message("请先打开 Git 项目。"));
         };
+        let _task = host::begin_task(TASK_TITLE, false);
         if let Err(message) = self.sync_checkout(&project) {
             return Ok(View::message(&message));
         }
-        let _task = (self.repo.is_none() || !self.form_initialized || !self.list_loaded)
-            .then(|| host::begin_task(TASK_TITLE, false));
         if self.repo.is_none() && self.status.is_empty() {
             if let Err(message) = self.load_repo(&project) {
                 self.status = message;
@@ -391,6 +393,7 @@ impl Views for Main {
         let Some(project) = ctx.project() else {
             return Ok(());
         };
+        let _task = host::begin_task(TASK_TITLE, false);
         if let Err(message) = self.sync_checkout(&project) {
             host::refresh_view(view);
             return Err(message.into());
@@ -403,7 +406,6 @@ impl Views for Main {
                 if matches!(&message, FormMessage::Search { .. }) && self.form_initialized {
                     return self.apply_form(&project, message).map_err(Into::into);
                 }
-                let _task = host::begin_task(TASK_TITLE, false);
                 let result = self.apply_form(&project, message);
                 let _ = host::post_view_message(CREATE, r#"{"complete":true}"#);
                 result
@@ -423,17 +425,14 @@ impl Views for Main {
                 let response = serde_json::json!({ "iid": message.iid, "message": feedback });
                 return host::post_view_message(REQUESTS, &response.to_string());
             }
-            ViewEvent::Button(id) => {
-                let _task = host::begin_task(TASK_TITLE, false);
-                match id.as_str() {
-                    "reload" => {
-                        self.status.clear();
-                        self.load_repo(&project)
-                    }
-                    "refresh" if view == REQUESTS => self.refresh_requests(&project),
-                    _ => Ok(()),
+            ViewEvent::Button(id) => match id.as_str() {
+                "reload" => {
+                    self.status.clear();
+                    self.load_repo(&project)
                 }
-            }
+                "refresh" if view == REQUESTS => self.refresh_requests(&project),
+                _ => Ok(()),
+            },
             _ => return Ok(()),
         };
         if let Err(message) = result {

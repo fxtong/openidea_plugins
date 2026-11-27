@@ -1,5 +1,7 @@
 mod gitlab;
 
+use std::collections::HashMap;
+
 use gitlab::{Draft, MergeRequest, Repository};
 use openidea_plugin::views::{Body, Button, View, ViewEvent, Viewport, Views};
 use openidea_plugin::{Error, Event, Invocation, Plugin, Project, host, register_plugin};
@@ -72,6 +74,12 @@ impl Checkout {
 
 #[derive(Default)]
 struct Main {
+    // OpenIDEA shares one plugin instance across project windows.
+    projects: HashMap<String, ProjectState>,
+}
+
+#[derive(Default)]
+struct ProjectState {
     checkout: Option<Checkout>,
     repo: Option<Repository>,
     draft: Draft,
@@ -86,13 +94,21 @@ struct Main {
 }
 
 impl Main {
-    fn sync_checkout(&mut self, project: &Project) -> Result<(), String> {
+    fn project_state(&mut self, project: &Project) -> Result<&mut ProjectState, String> {
         let checkout = Checkout::read(project)?;
+        let state = self.projects.entry(checkout.root.clone()).or_default();
+        state.sync_checkout(checkout);
+        Ok(state)
+    }
+}
+
+impl ProjectState {
+    fn sync_checkout(&mut self, checkout: Checkout) {
         if self.checkout.as_ref() != Some(&checkout) {
             let project_changed = self
                 .checkout
                 .as_ref()
-                .is_none_or(|saved| saved.root != checkout.root || saved.origin != checkout.origin);
+                .is_none_or(|saved| saved.origin != checkout.origin);
             if project_changed {
                 *self = Self::default();
             } else {
@@ -110,7 +126,6 @@ impl Main {
             }
             self.checkout = Some(checkout);
         }
-        Ok(())
     }
 
     fn load_repo(&mut self, project: &Project) -> Result<(), String> {
@@ -329,15 +344,22 @@ impl Plugin for Main {
     }
 
     fn handle_events(&mut self, events: &[Event], ctx: &Invocation) {
-        if !events.iter().any(|event| matches!(event, Event::VcsChanged(_))) {
+        if !events
+            .iter()
+            .any(|event| matches!(event, Event::VcsChanged(_)))
+        {
             return;
         }
         let Some(project) = ctx.project() else {
             return;
         };
-        if let Some(checkout) = &self.checkout {
+        if !self.projects.is_empty() {
             let _task = host::begin_task(TASK_TITLE, false);
-            if Checkout::read(&project).ok().as_ref() == Some(checkout) {
+            if Checkout::read(&project).is_ok_and(|checkout| {
+                self.projects
+                    .get(&checkout.root)
+                    .is_some_and(|state| state.checkout.as_ref() == Some(&checkout))
+            }) {
                 return;
             }
         }
@@ -357,11 +379,33 @@ impl Views for Main {
             return Ok(View::message("请先打开 Git 项目。"));
         };
         let _task = host::begin_task(TASK_TITLE, false);
-        if let Err(message) = self.sync_checkout(&project) {
-            return Ok(View::message(&message));
-        }
+        let state = match self.project_state(&project) {
+            Ok(state) => state,
+            Err(message) => return Ok(View::message(&message)),
+        };
+        state.render(view, &project)
+    }
+
+    fn handle(&mut self, view: &str, event: ViewEvent, ctx: &Invocation) -> Result<(), Error> {
+        let Some(project) = ctx.project() else {
+            return Ok(());
+        };
+        let _task = host::begin_task(TASK_TITLE, false);
+        let state = match self.project_state(&project) {
+            Ok(state) => state,
+            Err(message) => {
+                host::refresh_view(view);
+                return Err(message.into());
+            }
+        };
+        state.handle(view, event, &project)
+    }
+}
+
+impl ProjectState {
+    fn render(&mut self, view: &str, project: &Project) -> Result<View, Error> {
         if self.repo.is_none() && self.status.is_empty() {
-            if let Err(message) = self.load_repo(&project) {
+            if let Err(message) = self.load_repo(project) {
                 self.status = message;
             }
         }
@@ -372,7 +416,7 @@ impl Views for Main {
         }
         if view == CREATE {
             if !self.form_initialized {
-                if let Err(message) = self.initialize_form(&project) {
+                if let Err(message) = self.initialize_form(project) {
                     return Ok(View::message(&message)
                         .button(Button::new("reload", "重新读取 GitLab 项目")));
                 }
@@ -382,31 +426,23 @@ impl Views for Main {
             );
         }
         if !self.list_loaded {
-            if let Err(message) = self.refresh_requests(&project) {
+            if let Err(message) = self.refresh_requests(project) {
                 self.list_status = message;
             }
         }
         Ok(self.list_view(self.repo.as_ref().unwrap()))
     }
 
-    fn handle(&mut self, view: &str, event: ViewEvent, ctx: &Invocation) -> Result<(), Error> {
-        let Some(project) = ctx.project() else {
-            return Ok(());
-        };
-        let _task = host::begin_task(TASK_TITLE, false);
-        if let Err(message) = self.sync_checkout(&project) {
-            host::refresh_view(view);
-            return Err(message.into());
-        }
+    fn handle(&mut self, view: &str, event: ViewEvent, project: &Project) -> Result<(), Error> {
         let result = match event {
             ViewEvent::Message(raw) if view == CREATE => {
                 let Ok(message) = serde_json::from_str::<FormMessage>(&raw) else {
                     return Ok(());
                 };
                 if matches!(&message, FormMessage::Search { .. }) && self.form_initialized {
-                    return self.apply_form(&project, message).map_err(Into::into);
+                    return self.apply_form(project, message).map_err(Into::into);
                 }
-                let result = self.apply_form(&project, message);
+                let result = self.apply_form(project, message);
                 let _ = host::post_view_message(CREATE, r#"{"complete":true}"#);
                 result
             }
@@ -428,9 +464,9 @@ impl Views for Main {
             ViewEvent::Button(id) => match id.as_str() {
                 "reload" => {
                     self.status.clear();
-                    self.load_repo(&project)
+                    self.load_repo(project)
                 }
-                "refresh" if view == REQUESTS => self.refresh_requests(&project),
+                "refresh" if view == REQUESTS => self.refresh_requests(project),
                 _ => Ok(()),
             },
             _ => return Ok(()),

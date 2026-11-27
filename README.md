@@ -1,36 +1,17 @@
 # OpenIDEA 插件
 
-每个插件的源码放在独立目录，可单独构建和安装。可直接安装的 `.oiplugin` 文件位于仓库根目录。
+每个插件的源码放在独立目录，`.oiplugin` 安装包位于仓库根目录。
 
-| 插件 | 功能 | 源码 |
-| --- | --- | --- |
-| Copy Git File Path | 复制当前文件在 Git 远程仓库中的网页链接 | [copy-git-file-path/](copy-git-file-path/) |
-| GitLab Merge Requests | 创建 MR、查看项目中打开的 MR、打开或复制 MR 链接 | [gitlab-merge-requests/](gitlab-merge-requests/) |
+| 插件 | 功能 | 安装包 | 源码 |
+| --- | --- | --- | --- |
+| Copy Git File Path | 复制当前文件在 Git 远程仓库中的网页链接 | [下载 0.0.3](copy-git-file-path-0.0.3.oiplugin?raw=true) | [copy-git-file-path/](copy-git-file-path/) |
+| GitLab Merge Requests | 创建 MR、查看项目中打开的 MR、打开或复制 MR 链接 | [下载 0.1.9](gitlab-merge-requests-0.1.9.oiplugin?raw=true) | [gitlab-merge-requests/](gitlab-merge-requests/) |
 
-## 构建和安装
+## 安装
 
-需要 Rust 工具链（支持 2024 edition）和支持插件 API `^1.4` 的 OpenIDEA。在仓库根目录执行 `rustup target add wasm32-wasip2`，再按需构建插件。
-
-### Copy Git File Path
-
-```sh
-cargo build --manifest-path copy-git-file-path/Cargo.toml --locked --release --target wasm32-wasip2 --target-dir tmp/target
-mkdir -p tmp/copy-git-file-path/dist
-cp copy-git-file-path/plugin.toml tmp/copy-git-file-path/
-cp tmp/target/wasm32-wasip2/release/copy_git_file_path.wasm tmp/copy-git-file-path/dist/plugin.wasm
-```
-
-### GitLab Merge Requests
-
-```sh
-cargo build --manifest-path gitlab-merge-requests/Cargo.toml --locked --release --target wasm32-wasip2 --target-dir tmp/target
-mkdir -p tmp/gitlab-merge-requests/dist tmp/gitlab-merge-requests/icons
-cp gitlab-merge-requests/plugin.toml tmp/gitlab-merge-requests/
-cp gitlab-merge-requests/icons/mr.svg tmp/gitlab-merge-requests/icons/
-cp tmp/target/wasm32-wasip2/release/gitlab_merge_requests.wasm tmp/gitlab-merge-requests/dist/plugin.wasm
-```
-
-打开 OpenIDEA 的 **Settings → Plugins → 齿轮菜单 → Install Plugin from Package File…**，选择仓库根目录中对应的 `.oiplugin` 文件。自行构建后，可在同一菜单选 **Install Plugin from Disk…**，再选择 `tmp/copy-git-file-path/` 或 `tmp/gitlab-merge-requests/`。
+1. 从上表下载所需的 `.oiplugin` 文件。
+2. 在 OpenIDEA 打开 **Settings → Plugins**，点击齿轮并选择 **Install Plugin from Package File…**。
+3. 选择下载的 `.oiplugin` 文件完成安装。
 
 ## 使用方式
 

@@ -1,6 +1,6 @@
 # OpenIDEA 插件
 
-每个插件的源码放在独立目录，可单独构建和安装。安装产物放在仓库根目录的 `tmp/`。
+每个插件的源码放在独立目录，可单独构建和安装。可直接安装的 `.oiplugin` 文件位于仓库根目录。
 
 | 插件 | 功能 | 源码 |
 | --- | --- | --- |
@@ -30,7 +30,7 @@ cp gitlab-merge-requests/icons/mr.svg tmp/gitlab-merge-requests/icons/
 cp tmp/target/wasm32-wasip2/release/gitlab_merge_requests.wasm tmp/gitlab-merge-requests/dist/plugin.wasm
 ```
 
-打开 OpenIDEA 的 **Settings → Plugins → 齿轮菜单 → Install Plugin from Disk…**，选择 `tmp/copy-git-file-path/` 或 `tmp/gitlab-merge-requests/`。已有 `.oiplugin` 安装包时，在同一菜单选 **Install Plugin from Package File…**。
+打开 OpenIDEA 的 **Settings → Plugins → 齿轮菜单 → Install Plugin from Package File…**，选择仓库根目录中对应的 `.oiplugin` 文件。自行构建后，可在同一菜单选 **Install Plugin from Disk…**，再选择 `tmp/copy-git-file-path/` 或 `tmp/gitlab-merge-requests/`。
 
 ## 使用方式
 

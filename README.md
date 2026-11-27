@@ -4,14 +4,19 @@
 
 | 插件 | 功能 | 安装包 | 源码 |
 | --- | --- | --- | --- |
-| Copy Git File Path | 复制当前文件在 Git 远程仓库中的网页链接 | [下载 0.0.3](copy-git-file-path-0.0.3.oiplugin?raw=true) | [copy-git-file-path/](copy-git-file-path/) |
-| GitLab Merge Requests | 创建 MR、查看项目中打开的 MR、打开或复制 MR 链接 | [下载 0.1.9](gitlab-merge-requests-0.1.9.oiplugin?raw=true) | [gitlab-merge-requests/](gitlab-merge-requests/) |
+| Copy Git File Path | 复制当前文件在 Git 远程仓库中的网页链接 | [下载 0.0.3](fxtong.copy-git-file-path-0.0.3.oiplugin?raw=true) | [copy-git-file-path/](copy-git-file-path/) |
+| GitLab Merge Requests | 创建 MR、查看项目中打开的 MR、打开或复制 MR 链接 | [下载 0.1.9](fxtong.gitlab-merge-requests-0.1.9.oiplugin?raw=true) | [gitlab-merge-requests/](gitlab-merge-requests/) |
 
 ## 安装
 
 1. 从上表下载所需的 `.oiplugin` 文件。
 2. 在 OpenIDEA 打开 **Settings → Plugins**，点击齿轮并选择 **Install Plugin from Package File…**。
 3. 选择下载的 `.oiplugin` 文件完成安装。
+
+## 插件权限
+
+- Copy Git File Path 使用 `editor.read` 获取当前文件路径，使用 `vcs.read` 读取 Git 根目录、分支和远端地址，再通过 `clipboard` 复制文件链接。
+- GitLab Merge Requests 使用 `vcs.read` 读取项目和分支，订阅 `events` 感知 Git 状态变化。它通过 `process:glab` 运行本机已登录的 GitLab CLI，查询项目、分支和 MR，并在确认提交后创建 MR。`clipboard` 用于复制所选 MR 的链接。
 
 ## 使用方式
 

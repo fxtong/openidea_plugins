@@ -1,4 +1,4 @@
-id = "local.copy-git-file-path"
+id = "fxtong.copy-git-file-path"
 name = "Copy Git File Path"
 version = "0.0.3"
 description = "Copy the web URL of a file in its Git repository."
